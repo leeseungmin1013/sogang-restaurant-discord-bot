@@ -1,0 +1,121 @@
+[
+  {
+    "id": "front-sura-001",
+    "name": "수라",
+    "area": "정문",
+    "category": "한식",
+    "signature_menu": "제육볶음",
+    "description": "서강대 정문 근처 식사 후보입니다. 지도 링크와 이미지는 제보로 보강해주세요.",
+    "image_url": "",
+    "map": {
+      "provider": "",
+      "url": ""
+    },
+    "submitted_by": null,
+    "status": "approved",
+    "created_at": "2026-05-04T00:00:00+09:00",
+    "updated_at": "2026-05-04T00:00:00+09:00"
+  },
+  {
+    "id": "front-geogujang-001",
+    "name": "거구장",
+    "area": "정문",
+    "category": "한식",
+    "signature_menu": "갈비탕",
+    "description": "서강대 정문 근처 식사 후보입니다. 지도 링크와 이미지는 제보로 보강해주세요.",
+    "image_url": "",
+    "map": {
+      "provider": "",
+      "url": ""
+    },
+    "submitted_by": null,
+    "status": "approved",
+    "created_at": "2026-05-04T00:00:00+09:00",
+    "updated_at": "2026-05-04T00:00:00+09:00"
+  },
+  {
+    "id": "back-mister-katsu-001",
+    "name": "미스터카츠",
+    "area": "후문",
+    "category": "일식",
+    "signature_menu": "돈까스",
+    "description": "서강대 후문 근처 식사 후보입니다. 지도 링크와 이미지는 제보로 보강해주세요.",
+    "image_url": "",
+    "map": {
+      "provider": "",
+      "url": ""
+    },
+    "submitted_by": null,
+    "status": "approved",
+    "created_at": "2026-05-04T00:00:00+09:00",
+    "updated_at": "2026-05-04T00:00:00+09:00"
+  },
+  {
+    "id": "back-onggojip-001",
+    "name": "옹고집",
+    "area": "후문",
+    "category": "한식",
+    "signature_menu": "부대찌개",
+    "description": "서강대 후문 근처 식사 후보입니다. 지도 링크와 이미지는 제보로 보강해주세요.",
+    "image_url": "",
+    "map": {
+      "provider": "",
+      "url": ""
+    },
+    "submitted_by": null,
+    "status": "approved",
+    "created_at": "2026-05-04T00:00:00+09:00",
+    "updated_at": "2026-05-04T00:00:00+09:00"
+  },
+  {
+    "id": "sinchon-karamenya-001",
+    "name": "카라멘야",
+    "area": "신촌",
+    "category": "일식",
+    "signature_menu": "라멘",
+    "description": "신촌 근처 식사 후보입니다. 지도 링크와 이미지는 제보로 보강해주세요.",
+    "image_url": "",
+    "map": {
+      "provider": "",
+      "url": ""
+    },
+    "submitted_by": null,
+    "status": "approved",
+    "created_at": "2026-05-04T00:00:00+09:00",
+    "updated_at": "2026-05-04T00:00:00+09:00"
+  },
+  {
+    "id": "sinchon-jungyukmyeonche-001",
+    "name": "정육면체",
+    "area": "신촌",
+    "category": "중식",
+    "signature_menu": "우육면",
+    "description": "신촌 근처 식사 후보입니다. 지도 링크와 이미지는 제보로 보강해주세요.",
+    "image_url": "",
+    "map": {
+      "provider": "",
+      "url": ""
+    },
+    "submitted_by": null,
+    "status": "approved",
+    "created_at": "2026-05-04T00:00:00+09:00",
+    "updated_at": "2026-05-04T00:00:00+09:00"
+  },
+  {
+    "id": "cafeteria-emmaohall-001",
+    "name": "엠마오관",
+    "area": "학식",
+    "category": "학식",
+    "signature_menu": "가성비",
+    "description": "서강대 학식 후보입니다. 지도 링크와 이미지는 제보로 보강해주세요.",
+    "image_url": "",
+    "map": {
+      "provider": "",
+      "url": ""
+    },
+    "submitted_by": null,
+    "status": "approved",
+    "created_at": "2026-05-04T00:00:00+09:00",
+    "updated_at": "2026-05-04T00:00:00+09:00"
+  }
+]

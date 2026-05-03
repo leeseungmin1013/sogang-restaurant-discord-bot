@@ -1,0 +1,17 @@
+[Unit]
+Description=Sogang restaurant recommendation Discord bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=seungminlee1013
+Group=seungminlee1013
+WorkingDirectory=/home/seungminlee1013/discord-sogang-bot
+EnvironmentFile=/home/seungminlee1013/discord-sogang-bot/.env
+ExecStart=/usr/bin/python3 /home/seungminlee1013/discord-sogang-bot/bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+.gcloud/
+.ssh/
+__pycache__/
+*.pyc
+.env
+remote-bot.py
+bot.env
