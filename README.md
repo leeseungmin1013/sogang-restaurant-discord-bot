@@ -116,12 +116,21 @@ The Discord token is stored in:
 !제보목록
 !제보승인 맛집ID
 !제보거절 맛집ID
+!맛집관리
 !도움말
 ```
 
 Admin commands are available to users with Discord `Manage Server` permission, or user IDs listed in `ADMIN_USER_IDS` inside `.env`.
 
 `!맛집제보` opens a Discord button and modal form. `!제보목록` shows pending reports with approve/reject buttons.
+
+`!맛집관리` opens an admin-only Discord UI for:
+
+- Adding an approved restaurant
+- Editing an existing restaurant
+- Archiving a restaurant so it disappears from recommendations
+- Toggling visibility between `approved` and `hidden`
+- Opening pending report approval cards
 
 Optional `.env` value:
 

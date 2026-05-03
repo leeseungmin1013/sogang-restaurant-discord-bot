@@ -258,6 +258,92 @@ def set_report_status(restaurant_id, status):
     return restaurant
 
 
+def add_approved_restaurant(report, user):
+    restaurants = load_restaurants()
+    created_at = now_iso()
+    report.update(
+        {
+            "id": make_restaurant_id(report["name"], report["area"]),
+            "submitted_by": {
+                "user_id": str(user.id),
+                "display_name": user.display_name,
+            },
+            "status": "approved",
+            "created_at": created_at,
+            "updated_at": created_at,
+        }
+    )
+    restaurants.append(report)
+    save_restaurants(restaurants)
+    return report
+
+
+def update_restaurant(restaurant_id, updates):
+    restaurants = load_restaurants()
+    restaurant = find_restaurant(restaurants, restaurant_id)
+    if not restaurant:
+        return None
+
+    current_status = restaurant.get("status", "approved")
+    restaurant.update(updates)
+    restaurant["id"] = restaurant_id
+    restaurant["status"] = current_status
+    restaurant["updated_at"] = now_iso()
+    save_restaurants(restaurants)
+    return restaurant
+
+
+def archive_restaurant(restaurant_id):
+    return set_report_status(restaurant_id, "archived")
+
+
+def toggle_restaurant_visibility(restaurant_id):
+    restaurants = load_restaurants()
+    restaurant = find_restaurant(restaurants, restaurant_id)
+    if not restaurant:
+        return None
+
+    current_status = restaurant.get("status", "approved")
+    if current_status == "approved":
+        restaurant["status"] = "hidden"
+    elif current_status == "hidden":
+        restaurant["status"] = "approved"
+    else:
+        restaurant["status"] = "approved"
+    restaurant["updated_at"] = now_iso()
+    save_restaurants(restaurants)
+    return restaurant
+
+
+def manageable_restaurants():
+    hidden_statuses = {"archived", "rejected"}
+    restaurants = load_restaurants()
+    return [item for item in restaurants if item.get("status", "approved") not in hidden_statuses]
+
+
+def status_counts(restaurants):
+    counts = {}
+    for restaurant in restaurants:
+        status = restaurant.get("status", "approved")
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def select_options_for_restaurants(restaurants):
+    options = []
+    for restaurant in restaurants[:25]:
+        label = restaurant_summary(restaurant)[:100]
+        description = f"상태: {restaurant.get('status', 'approved')}"
+        options.append(
+            discord.SelectOption(
+                label=label or restaurant.get("id", "unknown"),
+                value=restaurant.get("id", ""),
+                description=description[:100],
+            )
+        )
+    return options
+
+
 def restaurant_summary(restaurant):
     chunks = [restaurant.get("area", ""), restaurant.get("name", "이름 없음")]
     if restaurant.get("signature_menu"):
@@ -427,6 +513,250 @@ class ApprovalView(discord.ui.View):
         await self.update_status(interaction, "rejected")
 
 
+class RestaurantManageView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    async def ensure_admin(self, interaction):
+        if is_admin_interaction(interaction):
+            return True
+        await interaction.response.send_message("이 기능은 관리자만 사용할 수 있어요.", ephemeral=True)
+        return False
+
+    @discord.ui.button(label="맛집 추가", style=discord.ButtonStyle.green)
+    async def create_restaurant(self, interaction, button):
+        if not await self.ensure_admin(interaction):
+            return
+        await interaction.response.send_modal(RestaurantFormModal(mode="create"))
+
+    @discord.ui.button(label="맛집 수정", style=discord.ButtonStyle.primary)
+    async def edit_restaurant(self, interaction, button):
+        if not await self.ensure_admin(interaction):
+            return
+        await send_restaurant_selector(interaction, "edit")
+
+    @discord.ui.button(label="맛집 삭제", style=discord.ButtonStyle.danger)
+    async def delete_restaurant(self, interaction, button):
+        if not await self.ensure_admin(interaction):
+            return
+        await send_restaurant_selector(interaction, "archive")
+
+    @discord.ui.button(label="활성/비활성", style=discord.ButtonStyle.secondary)
+    async def toggle_restaurant(self, interaction, button):
+        if not await self.ensure_admin(interaction):
+            return
+        await send_restaurant_selector(interaction, "toggle")
+
+    @discord.ui.button(label="승인 대기", style=discord.ButtonStyle.secondary)
+    async def pending_reports(self, interaction, button):
+        if not await self.ensure_admin(interaction):
+            return
+
+        pending = [item for item in load_restaurants() if item.get("status") == "pending"]
+        if not pending:
+            await interaction.response.send_message("대기 중인 제보가 없어요.", ephemeral=True)
+            return
+
+        await interaction.response.send_message(f"대기 중인 맛집 제보 {len(pending)}개", ephemeral=True)
+        for item in pending[:10]:
+            await interaction.followup.send(embed=report_embed(item), view=ApprovalView(item["id"]), ephemeral=True)
+        if len(pending) > 10:
+            await interaction.followup.send(f"한 번에 10개만 표시했어요. 남은 제보: {len(pending) - 10}개", ephemeral=True)
+
+
+class RestaurantSelect(discord.ui.Select):
+    def __init__(self, action, restaurants):
+        self.action = action
+        placeholders = {
+            "edit": "수정할 맛집을 선택하세요.",
+            "archive": "삭제할 맛집을 선택하세요.",
+            "toggle": "활성/비활성 전환할 맛집을 선택하세요.",
+        }
+        super().__init__(
+            placeholder=placeholders.get(action, "맛집을 선택하세요."),
+            min_values=1,
+            max_values=1,
+            options=select_options_for_restaurants(restaurants),
+        )
+
+    async def callback(self, interaction):
+        if not is_admin_interaction(interaction):
+            await interaction.response.send_message("이 기능은 관리자만 사용할 수 있어요.", ephemeral=True)
+            return
+
+        restaurant_id = self.values[0]
+        restaurants = load_restaurants()
+        restaurant = find_restaurant(restaurants, restaurant_id)
+        if not restaurant:
+            await interaction.response.send_message("해당 맛집을 찾지 못했어요.", ephemeral=True)
+            return
+
+        if self.action == "edit":
+            await interaction.response.send_modal(RestaurantFormModal(mode="edit", restaurant=restaurant))
+            return
+
+        if self.action == "archive":
+            await interaction.response.send_message(
+                f"`{restaurant_summary(restaurant)}`을 보관 처리할까요? 추천과 목록에서 제외됩니다.",
+                view=ArchiveConfirmView(restaurant_id),
+                ephemeral=True,
+            )
+            return
+
+        if self.action == "toggle":
+            async with data_lock:
+                updated = toggle_restaurant_visibility(restaurant_id)
+            if not updated:
+                await interaction.response.send_message("해당 맛집을 찾지 못했어요.", ephemeral=True)
+                return
+            await interaction.response.send_message(
+                f"`{restaurant_summary(updated)}` 상태가 `{updated.get('status')}`로 변경됐어요.",
+                ephemeral=True,
+            )
+
+
+class RestaurantSelectView(discord.ui.View):
+    def __init__(self, action, restaurants):
+        super().__init__(timeout=300)
+        self.add_item(RestaurantSelect(action, restaurants))
+
+
+class RestaurantFormModal(discord.ui.Modal):
+    def __init__(self, mode, restaurant=None):
+        self.mode = mode
+        self.restaurant_id = restaurant.get("id") if restaurant else None
+        title = "맛집 추가" if mode == "create" else "맛집 수정"
+        super().__init__(title=title)
+
+        map_info = (restaurant or {}).get("map") or {}
+        category_menu = ""
+        if restaurant:
+            category_menu = f"{restaurant.get('category', '')} | {restaurant.get('signature_menu', '')}".strip(" |")
+        image_description = ""
+        if restaurant:
+            image_description = f"{restaurant.get('image_url', '')} | {restaurant.get('description', '')}".strip(" |")
+
+        self.name_input = discord.ui.TextInput(
+            label="맛집 이름",
+            placeholder="예: 수라",
+            default=(restaurant or {}).get("name", ""),
+            max_length=80,
+        )
+        self.area_input = discord.ui.TextInput(
+            label="위치",
+            placeholder="예: 정문, 후문, 신촌",
+            default=(restaurant or {}).get("area", ""),
+            max_length=40,
+        )
+        self.category_menu_input = discord.ui.TextInput(
+            label="분류 | 대표메뉴",
+            placeholder="예: 한식 | 제육볶음",
+            default=category_menu,
+            required=False,
+            max_length=100,
+        )
+        self.map_url_input = discord.ui.TextInput(
+            label="네이버/카카오/구글 지도 링크",
+            placeholder="https://map.naver.com/...",
+            default=map_info.get("url", ""),
+            max_length=500,
+        )
+        self.image_description_input = discord.ui.TextInput(
+            label="이미지 URL 또는 설명",
+            placeholder="예: 가성비 좋은 한식집 / https://...jpg | 설명",
+            default=image_description,
+            required=False,
+            style=discord.TextStyle.paragraph,
+            max_length=800,
+        )
+
+        self.add_item(self.name_input)
+        self.add_item(self.area_input)
+        self.add_item(self.category_menu_input)
+        self.add_item(self.map_url_input)
+        self.add_item(self.image_description_input)
+
+    async def on_submit(self, interaction):
+        if not is_admin_interaction(interaction):
+            await interaction.response.send_message("이 기능은 관리자만 사용할 수 있어요.", ephemeral=True)
+            return
+
+        try:
+            report = build_report(
+                self.name_input.value,
+                self.area_input.value,
+                self.category_menu_input.value,
+                self.map_url_input.value,
+                self.image_description_input.value,
+            )
+        except ValueError as error:
+            await interaction.response.send_message(str(error), ephemeral=True)
+            return
+
+        async with data_lock:
+            if self.mode == "create":
+                restaurant = add_approved_restaurant(report, interaction.user)
+                message = f"맛집 추가 완료: `{restaurant['id']}`"
+            else:
+                restaurant = update_restaurant(self.restaurant_id, report)
+                if not restaurant:
+                    await interaction.response.send_message("수정할 맛집을 찾지 못했어요.", ephemeral=True)
+                    return
+                message = f"맛집 수정 완료: `{restaurant['id']}`"
+
+        await interaction.response.send_message(message, embed=restaurant_embed(restaurant, title="맛집 관리"), ephemeral=True)
+
+    async def on_error(self, interaction, error):
+        print(f"맛집 관리 Modal 오류: {error!r}")
+        if not interaction.response.is_done():
+            await interaction.response.send_message("처리 중 오류가 났어요. 잠시 뒤 다시 시도해주세요.", ephemeral=True)
+
+
+class ArchiveConfirmView(discord.ui.View):
+    def __init__(self, restaurant_id):
+        super().__init__(timeout=120)
+        self.restaurant_id = restaurant_id
+
+    @discord.ui.button(label="삭제 확정", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction, button):
+        if not is_admin_interaction(interaction):
+            await interaction.response.send_message("이 기능은 관리자만 사용할 수 있어요.", ephemeral=True)
+            return
+
+        async with data_lock:
+            restaurant = archive_restaurant(self.restaurant_id)
+
+        if not restaurant:
+            await interaction.response.send_message("해당 맛집을 찾지 못했어요.", ephemeral=True)
+            return
+
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(
+            content=f"보관 처리 완료: `{restaurant_summary(restaurant)}`",
+            view=self,
+        )
+
+    @discord.ui.button(label="취소", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction, button):
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(content="취소했어요.", view=self)
+
+
+async def send_restaurant_selector(interaction, action):
+    restaurants = manageable_restaurants()
+    if not restaurants:
+        await interaction.response.send_message("관리할 맛집이 아직 없어요.", ephemeral=True)
+        return
+
+    shown = restaurants[:25]
+    message = f"맛집 {len(restaurants)}개 중 {len(shown)}개를 표시합니다."
+    if len(restaurants) > 25:
+        message += " Discord 제한 때문에 현재는 상위 25개만 선택할 수 있어요."
+    await interaction.response.send_message(message, view=RestaurantSelectView(action, shown), ephemeral=True)
+
+
 @bot.event
 async def on_ready():
     if not getattr(bot, "persistent_views_added", False):
@@ -557,6 +887,25 @@ async def reject_report(ctx, restaurant_id: str):
     await ctx.send(f"거절 완료: `{restaurant_id}`")
 
 
+@bot.command(name="맛집관리")
+async def manage_restaurants(ctx):
+    if not is_admin(ctx):
+        await ctx.send("이 명령은 관리자만 사용할 수 있어요.")
+        return
+
+    restaurants = load_restaurants()
+    counts = status_counts(restaurants)
+    summary = (
+        "맛집 관리 패널\n"
+        f"- 전체: {len(restaurants)}개\n"
+        f"- 승인됨: {counts.get('approved', 0)}개\n"
+        f"- 대기중: {counts.get('pending', 0)}개\n"
+        f"- 숨김: {counts.get('hidden', 0)}개\n"
+        f"- 보관: {counts.get('archived', 0)}개"
+    )
+    await ctx.send(summary, view=RestaurantManageView())
+
+
 @bot.command(name="도움말")
 async def help_command(ctx):
     await ctx.send(
@@ -566,7 +915,8 @@ async def help_command(ctx):
         "- `!맛집상세 맛집ID`: 상세 정보\n"
         "- `!맛집제보`: 버튼과 입력창으로 맛집 제보\n"
         "- `!맛집제보 이름 | 위치 | 지도링크`: 텍스트로 맛집 제보\n"
-        "- `!제보목록`: 관리자 승인 UI 보기"
+        "- `!제보목록`: 관리자 승인 UI 보기\n"
+        "- `!맛집관리`: 관리자용 추가/수정/삭제 패널"
     )
 
 
