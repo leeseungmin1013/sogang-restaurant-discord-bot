@@ -982,6 +982,17 @@ async def manage_restaurants(ctx):
     await ctx.send(summary, view=RestaurantManageView())
 
 
+@bot.command(name="서버ID")
+async def show_guild_id(ctx):
+    if not ctx.guild:
+        await ctx.send("서버 채널에서 실행해주세요.")
+        return
+    if not is_admin(ctx):
+        await ctx.send("이 명령은 관리자만 사용할 수 있어요.")
+        return
+    await ctx.send(f"이 서버의 ID는 `{ctx.guild.id}` 입니다.")
+
+
 @bot.command(name="도움말")
 async def help_command(ctx):
     await ctx.send(
@@ -992,7 +1003,8 @@ async def help_command(ctx):
         "- `!맛집제보`: 버튼과 입력창으로 맛집 제보\n"
         "- `!맛집제보 이름 | 위치 | 지도링크`: 텍스트로 맛집 제보\n"
         "- `!제보목록`: 관리자 승인 UI 보기\n"
-        "- `!맛집관리`: 관리자용 추가/수정/삭제 패널"
+        "- `!맛집관리`: 관리자용 추가/수정/삭제 패널\n"
+        "- `!서버ID`: 관리자용 Discord 서버 ID 확인"
     )
 
 

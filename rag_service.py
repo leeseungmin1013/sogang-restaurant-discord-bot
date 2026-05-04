@@ -62,6 +62,7 @@ def _env_int(name, default):
 def _json_request(url, method="GET", headers=None, payload=None, timeout=30):
     body = None
     if payload is not None:
+        payload = sanitize_json_value(payload)
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
     request = urllib.request.Request(url, data=body, method=method)
@@ -115,7 +116,23 @@ def build_embedding_text(restaurant):
         f"지도: {map_info.get('provider', '')} {map_info.get('url', '')}",
         f"태그: {', '.join(tags)}",
     ]
-    return "\n".join(part for part in parts if part.split(":", 1)[-1].strip())
+    return clean_text("\n".join(part for part in parts if part.split(":", 1)[-1].strip()))
+
+
+def clean_text(value):
+    if value is None:
+        return ""
+    return str(value).encode("utf-8", errors="ignore").decode("utf-8")
+
+
+def sanitize_json_value(value):
+    if isinstance(value, str):
+        return clean_text(value)
+    if isinstance(value, list):
+        return [sanitize_json_value(item) for item in value]
+    if isinstance(value, dict):
+        return {clean_text(key): sanitize_json_value(item) for key, item in value.items()}
+    return value
 
 
 def embed_text(text):
@@ -126,6 +143,7 @@ def embed_text(text):
     model = get_env(GEMINI_EMBEDDING_MODEL_ENV, DEFAULT_EMBEDDING_MODEL)
     dimensions = _env_int(GEMINI_EMBEDDING_DIMENSIONS_ENV, DEFAULT_EMBEDDING_DIMENSIONS)
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent?key={api_key}"
+    text = clean_text(text)
     payload = {
         "content": {
             "parts": [{"text": text}],
@@ -146,13 +164,15 @@ def generate_answer(user_query, restaurants):
 
     model = get_env(GEMINI_GENERATION_MODEL_ENV, DEFAULT_GENERATION_MODEL)
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-    context = "\n\n".join(format_restaurant_context(item) for item in restaurants)
+    user_query = clean_text(user_query)
+    context = clean_text("\n\n".join(format_restaurant_context(item) for item in restaurants))
     prompt = f"""
-너는 서강대 주변 맛집을 잘 아는 친절한 Discord 미식 가이드다.
+너는 서강대 주변 맛집을 잘 아는 차분하고 친절한 Discord 미식 가이드다.
 아래 제공된 식당 후보만 사용해서 답하라.
 후보에 없는 식당은 절대 만들지 마라.
 지도 링크와 이미지 정보는 제공된 값만 사용하라.
 의학, 알레르기, 건강 관련 상황은 단정하지 말고 조심스럽게 표현하라.
+과한 감탄사, 이모지, 반말은 쓰지 말고 자연스러운 존댓말로 답하라.
 
 사용자 상황:
 {user_query}
@@ -223,6 +243,7 @@ def _to_rag_restaurant(row):
 
 
 def search_restaurants(user_query, guild_id, match_count=5):
+    user_query = clean_text(user_query)
     query_embedding = embed_text(user_query)
     payload = {
         "query_embedding": query_embedding,
