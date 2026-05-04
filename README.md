@@ -163,6 +163,8 @@ GEMINI_EMBEDDING_DIMENSIONS=768
 
 Supabase setup SQL is in `supabase_schema.sql`. After configuring `.env`, migrate the existing JSON data with:
 
+Run `supabase_schema.sql` once in the Supabase SQL Editor first. The bot's `SUPABASE_SERVICE_ROLE_KEY` can read/write rows, but it cannot create the database schema by itself through PostgREST.
+
 ```powershell
 $env:MIGRATION_GUILD_ID="YOUR_DISCORD_SERVER_ID"
 python .\scripts\migrate_json_to_supabase.py

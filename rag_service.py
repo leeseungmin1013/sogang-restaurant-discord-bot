@@ -42,14 +42,18 @@ _cache = {}
 
 def rag_is_configured():
     return bool(
-        os.environ.get(SUPABASE_URL_ENV)
-        and os.environ.get(SUPABASE_SERVICE_ROLE_KEY_ENV)
-        and os.environ.get(GEMINI_API_KEY_ENV)
+        get_env(SUPABASE_URL_ENV)
+        and get_env(SUPABASE_SERVICE_ROLE_KEY_ENV)
+        and get_env(GEMINI_API_KEY_ENV)
     )
 
 
+def get_env(name, default=""):
+    return os.environ.get(name, default).strip()
+
+
 def _env_int(name, default):
-    raw = os.environ.get(name, "").strip()
+    raw = get_env(name)
     if not raw:
         return default
     return int(raw)
@@ -76,7 +80,7 @@ def _json_request(url, method="GET", headers=None, payload=None, timeout=30):
 
 
 def _supabase_headers(prefer=None):
-    key = os.environ.get(SUPABASE_SERVICE_ROLE_KEY_ENV)
+    key = get_env(SUPABASE_SERVICE_ROLE_KEY_ENV)
     if not key:
         raise RagConfigurationError("SUPABASE_SERVICE_ROLE_KEY is not set.")
 
@@ -90,7 +94,7 @@ def _supabase_headers(prefer=None):
 
 
 def _supabase_url(path):
-    base_url = os.environ.get(SUPABASE_URL_ENV, "").rstrip("/")
+    base_url = get_env(SUPABASE_URL_ENV).rstrip("/")
     if not base_url:
         raise RagConfigurationError("SUPABASE_URL is not set.")
     return f"{base_url}{path}"
@@ -115,11 +119,11 @@ def build_embedding_text(restaurant):
 
 
 def embed_text(text):
-    api_key = os.environ.get(GEMINI_API_KEY_ENV)
+    api_key = get_env(GEMINI_API_KEY_ENV)
     if not api_key:
         raise RagConfigurationError("GEMINI_API_KEY is not set.")
 
-    model = os.environ.get(GEMINI_EMBEDDING_MODEL_ENV, DEFAULT_EMBEDDING_MODEL)
+    model = get_env(GEMINI_EMBEDDING_MODEL_ENV, DEFAULT_EMBEDDING_MODEL)
     dimensions = _env_int(GEMINI_EMBEDDING_DIMENSIONS_ENV, DEFAULT_EMBEDDING_DIMENSIONS)
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent?key={api_key}"
     payload = {
@@ -136,11 +140,11 @@ def embed_text(text):
 
 
 def generate_answer(user_query, restaurants):
-    api_key = os.environ.get(GEMINI_API_KEY_ENV)
+    api_key = get_env(GEMINI_API_KEY_ENV)
     if not api_key:
         raise RagConfigurationError("GEMINI_API_KEY is not set.")
 
-    model = os.environ.get(GEMINI_GENERATION_MODEL_ENV, DEFAULT_GENERATION_MODEL)
+    model = get_env(GEMINI_GENERATION_MODEL_ENV, DEFAULT_GENERATION_MODEL)
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     context = "\n\n".join(format_restaurant_context(item) for item in restaurants)
     prompt = f"""
