@@ -117,6 +117,7 @@ The Discord token is stored in:
 !제보승인 맛집ID
 !제보거절 맛집ID
 !맛집관리
+!추천 자연어질문
 !도움말
 ```
 
@@ -132,6 +133,15 @@ Admin commands are available to users with Discord `Manage Server` permission, o
 - Toggling visibility between `approved` and `hidden`
 - Opening pending report approval cards
 
+`!추천` uses Supabase pgvector + Gemini API when configured. Without those environment variables, the rest of the bot continues to run in JSON mode.
+
+Example:
+
+```text
+!추천 교정 중이라 부드러운 음식 먹고 싶어
+!추천 선배님께 밥보은할 조용한 일식집
+```
+
 Optional `.env` value:
 
 ```text
@@ -139,3 +149,21 @@ ADMIN_CHANNEL_ID=123456789012345678
 ```
 
 When set, new reports are posted to that channel with approve/reject buttons automatically.
+
+Optional RAG values:
+
+```text
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_GENERATION_MODEL=gemini-2.5-flash
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+GEMINI_EMBEDDING_DIMENSIONS=768
+```
+
+Supabase setup SQL is in `supabase_schema.sql`. After configuring `.env`, migrate the existing JSON data with:
+
+```powershell
+$env:MIGRATION_GUILD_ID="YOUR_DISCORD_SERVER_ID"
+python .\scripts\migrate_json_to_supabase.py
+```

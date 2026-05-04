@@ -12,6 +12,13 @@ from urllib.parse import parse_qs, unquote, urlparse
 import discord
 from discord.ext import commands
 
+from rag_service import (
+    RagConfigurationError,
+    rag_is_configured,
+    recommend_with_rag,
+    upsert_restaurant,
+)
+
 
 TOKEN_ENV_NAME = "DISCORD_TOKEN"
 ADMIN_IDS_ENV_NAME = "ADMIN_USER_IDS"
@@ -30,6 +37,11 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 data_lock = asyncio.Lock()
+
+
+def get_guild_id(source):
+    guild = getattr(source, "guild", None)
+    return guild.id if guild else 0
 
 
 def now_iso():
@@ -344,6 +356,16 @@ def select_options_for_restaurants(restaurants):
     return options
 
 
+async def maybe_sync_restaurant_to_supabase(restaurant, guild_id):
+    if not guild_id or not rag_is_configured():
+        return
+
+    try:
+        await asyncio.to_thread(upsert_restaurant, restaurant, guild_id)
+    except Exception as error:
+        print(f"Supabase 맛집 동기화 실패: {restaurant.get('id')} {error!r}")
+
+
 def restaurant_summary(restaurant):
     chunks = [restaurant.get("area", ""), restaurant.get("name", "이름 없음")]
     if restaurant.get("signature_menu"):
@@ -498,6 +520,7 @@ class ApprovalView(discord.ui.View):
             item.disabled = True
 
         label = "승인됨" if status == "approved" else "거절됨"
+        await maybe_sync_restaurant_to_supabase(restaurant, get_guild_id(interaction))
         await interaction.response.edit_message(
             content=f"{label}: `{self.restaurant_id}`",
             embed=report_embed(restaurant, title=f"맛집 제보 {label}"),
@@ -609,6 +632,7 @@ class RestaurantSelect(discord.ui.Select):
             if not updated:
                 await interaction.response.send_message("해당 맛집을 찾지 못했어요.", ephemeral=True)
                 return
+            await maybe_sync_restaurant_to_supabase(updated, get_guild_id(interaction))
             await interaction.response.send_message(
                 f"`{restaurant_summary(updated)}` 상태가 `{updated.get('status')}`로 변경됐어요.",
                 ephemeral=True,
@@ -704,6 +728,7 @@ class RestaurantFormModal(discord.ui.Modal):
                     return
                 message = f"맛집 수정 완료: `{restaurant['id']}`"
 
+        await maybe_sync_restaurant_to_supabase(restaurant, get_guild_id(interaction))
         await interaction.response.send_message(message, embed=restaurant_embed(restaurant, title="맛집 관리"), ephemeral=True)
 
     async def on_error(self, interaction, error):
@@ -730,6 +755,7 @@ class ArchiveConfirmView(discord.ui.View):
             await interaction.response.send_message("해당 맛집을 찾지 못했어요.", ephemeral=True)
             return
 
+        await maybe_sync_restaurant_to_supabase(restaurant, get_guild_id(interaction))
         for item in self.children:
             item.disabled = True
         await interaction.response.edit_message(
@@ -869,6 +895,7 @@ async def approve_report(ctx, restaurant_id: str):
             await ctx.send("해당 ID의 제보를 찾지 못했어요.")
             return
 
+    await maybe_sync_restaurant_to_supabase(restaurant, get_guild_id(ctx))
     await ctx.send(f"승인 완료: `{restaurant_id}`")
 
 
@@ -884,7 +911,56 @@ async def reject_report(ctx, restaurant_id: str):
             await ctx.send("해당 ID의 제보를 찾지 못했어요.")
             return
 
+    await maybe_sync_restaurant_to_supabase(restaurant, get_guild_id(ctx))
     await ctx.send(f"거절 완료: `{restaurant_id}`")
+
+
+@bot.command(name="추천", aliases=["ai추천", "상황추천"])
+async def ai_recommend(ctx, *, query: str = ""):
+    if not query.strip():
+        await ctx.send("상황을 같이 적어주세요. 예: `!추천 교정 중이라 부드러운 음식 먹고 싶어`")
+        return
+
+    if not ctx.guild:
+        await ctx.send("서버별 맛집 데이터를 사용하므로 서버 채널에서만 사용할 수 있어요.")
+        return
+
+    if not rag_is_configured():
+        await ctx.send(
+            "AI 추천은 아직 설정 전이에요. 관리자가 Supabase와 Gemini API 키를 `.env`에 추가하면 사용할 수 있습니다."
+        )
+        return
+
+    async with ctx.typing():
+        try:
+            answer, matched, cached = await asyncio.to_thread(recommend_with_rag, query, ctx.guild.id)
+        except RagConfigurationError as error:
+            await ctx.send(f"AI 추천 설정이 아직 부족해요: {error}")
+            return
+        except Exception as error:
+            print(f"AI 추천 실패: {error!r}")
+            await ctx.send("AI 추천 중 오류가 났어요. 잠시 뒤 다시 시도해주세요.")
+            return
+
+    embed = discord.Embed(
+        title="상황 맞춤 맛집 추천",
+        description=answer[:4000],
+        color=0x4F46E5,
+    )
+    embed.add_field(name="질문", value=query[:1000], inline=False)
+    if matched:
+        matched_text = "\n".join(
+            f"- {item.name} ({item.area})"
+            + (f" · 유사도 {item.similarity:.2f}" if item.similarity is not None else "")
+            for item in matched[:5]
+        )
+        embed.add_field(name="참고한 맛집", value=matched_text[:1000], inline=False)
+        if matched[0].image_url:
+            embed.set_image(url=matched[0].image_url)
+    if cached:
+        embed.set_footer(text="캐시된 추천 결과")
+
+    await ctx.send(embed=embed)
 
 
 @bot.command(name="맛집관리")

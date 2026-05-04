@@ -13,6 +13,7 @@ if [[ -f "/home/${APP_USER}/bot.py" ]]; then
 fi
 
 install -o "${APP_USER}" -g "${APP_GROUP}" -m 644 /tmp/bot.py "${APP_DIR}/bot.py"
+install -o "${APP_USER}" -g "${APP_GROUP}" -m 644 /tmp/rag_service.py "${APP_DIR}/rag_service.py"
 install -o "${APP_USER}" -g "${APP_GROUP}" -m 644 /tmp/requirements.txt "${APP_DIR}/requirements.txt"
 install -o root -g root -m 644 /tmp/discord-sogang-bot.service "/etc/systemd/system/${SERVICE_NAME}"
 
